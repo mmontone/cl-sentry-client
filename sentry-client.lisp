@@ -110,7 +110,27 @@
     (encode-stacktrace condition json-stream sentry-client)))
 
 (defun encode-stacktrace (condition json-stream &optional (sentry-client *sentry-client*))
-  (json:encode-json "" json-stream))
+  "Encode the stacktrace as a plain string for now"
+  (flet ((encode-frame (frame)
+           (json:with-object (json-stream)
+             (json:encode-object-member "function" (princ-to-string (trivial-backtrace::frame-func frame)) json-stream)
+             (json:as-object-member ("vars" json-stream)
+               (json:with-object (json-stream)
+                 (loop for var in (trivial-backtrace::frame-vars frame)
+                    do
+                      (json:encode-object-member (princ-to-string (trivial-backtrace::var-name var))
+                                                 (princ-to-string (trivial-backtrace::var-value var))
+                                                 json-stream))))
+             (json:encode-object-member "filename" (trivial-backtrace::frame-source-filename frame))
+             ;;(json:encode-object-member "lineno" (trivial-backtrace::frame-source-pos frame))
+             )))
+    (json:with-object (json-stream)
+      (json:as-object-member ("frames" json-stream)
+        (json:with-array (json-stream)
+          (trivial-backtrace:map-backtrace
+           (lambda (frame)
+             (json:as-array-member (json-stream)
+               (encode-frame frame)))))))))
 
 (defun capture-exception (condition &key tags)
   (let ((json (with-output-to-string (json:*json-output*)
