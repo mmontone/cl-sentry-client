@@ -20,6 +20,17 @@ Or in your own error handler:
       ...)))
 ```
 
+### Hunchentoot handler
+
+```lisp
+(defmethod hunchentoot:maybe-invoke-debugger :after (condition)
+    (when hunchentoot:*catch-errors-p*
+        ;; There's an error in trivial-backtrace:map-backtrace in SBCL 
+        ;; if we don't set sb-debug:*stack-top-hint* to NIL
+        (let ((sb-debug:*stack-top-hint* nil)) 
+           (sentry-client:capture-exception condition))))
+```
+
 ## License
 
 MIT
