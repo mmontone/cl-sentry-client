@@ -147,10 +147,12 @@
 (defun capture-message (message &key tags)
   )
 
-(defmacro with-sentry-error-handler (options &body body)
+(defmacro with-sentry-error-handler ((&key (resignal t)) &body body)
   `(handler-case (progn ,@body)
      (error (e)
-       (sentry-client:capture-exception e))))
+       (sentry-client:capture-exception e)
+       ,@(when resignal
+           `((error e))))))
 
 (defun test-sentry-client (&optional (sentry-client *sentry-client*))
   (handler-case (error "Sentry client test")
