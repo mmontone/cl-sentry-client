@@ -31,6 +31,11 @@ Or in your own error handler:
            (sentry-client:capture-exception condition))))
 ```
 
+## Screenshots
+
+![alt text](https://github.com/mmontone/cl-sentry-client/raw/master/doc/screenshot1.png "Screenshot 1")
+![alt text](https://github.com/mmontone/cl-sentry-client/raw/master/doc/screenshot2.png "Screenshot 2")
+
 ## License
 
 MIT
