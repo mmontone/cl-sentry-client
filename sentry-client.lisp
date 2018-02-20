@@ -124,13 +124,14 @@
              (json:encode-object-member "filename" (trivial-backtrace::frame-source-filename frame))
              ;;(json:encode-object-member "lineno" (trivial-backtrace::frame-source-pos frame))
              )))
-    (json:with-object (json-stream)
-      (json:as-object-member ("frames" json-stream)
-        (json:with-array (json-stream)
-          (trivial-backtrace:map-backtrace
-           (lambda (frame)
-             (json:as-array-member (json-stream)
-               (encode-frame frame)))))))))
+    (let ((frames nil))
+      (trivial-backtrace:map-backtrace (lambda (frame) (push frame frames)))
+      (json:with-object (json-stream)
+        (json:as-object-member ("frames" json-stream)
+          (json:with-array (json-stream)
+            (loop for frame in frames do
+                 (json:as-array-member (json-stream)
+                   (encode-frame frame)))))))))
 
 (defun capture-exception (condition &key tags)
   (let ((json (with-output-to-string (json:*json-output*)
