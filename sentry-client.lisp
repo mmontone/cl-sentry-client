@@ -103,9 +103,9 @@
       (json:encode-object-member "version" (asdf:component-version (asdf:find-system :sentry-client))))))
 
 (defun encode-exception (condition json-stream &optional (sentry-client *sentry-client*))
-  (json:encode-object-member "type" (type-of condition) json-stream)
+  (json:encode-object-member "type" (princ-to-string (type-of condition)) json-stream)
   (json:encode-object-member "value" (princ-to-string condition) json-stream)
-  (json:encode-object-member "module" (princ-to-string (symbol-package (type-of condition))) json-stream)
+  (json:encode-object-member "module" (princ-to-string (package-name (symbol-package (type-of condition)))) json-stream)
   (json:as-object-member ("stacktrace") 
     (encode-stacktrace condition json-stream sentry-client)))
 
