@@ -66,6 +66,12 @@
   (append local-time:+iso-8601-date-format+
           (list #\T) local-time:+iso-8601-time-format+))
 
+(defun format-sentry-timestamp (stream timestamp)
+  (local-time:format-timestring stream
+                                (local-time:now)
+                                :format +sentry-timestamp-format+
+                                :timezone local-time:+UTC-ZONE+))
+
 (defun post-sentry-request (data &optional (sentry-client *sentry-client*))
   (drakma:http-request (sentry-api-url)
                        :method :post
@@ -77,7 +83,7 @@
                               (fmt:fmt nil "Sentry sentry_version=" 5 ","
                                        "sentry_client=" "cl-sentry-client/"
                                        (asdf:component-version (asdf:find-system :sentry-client)) ","
-                                       "sentry_timestamp=" (local-time:format-timestring nil (local-time:now) :format +sentry-timestamp-format+) ","
+                                       "sentry_timestamp=" (format-sentry-timestamp nil (local-time:now)) ","
                                        "sentry_key=" (getf (dsn sentry-client) :public-key) ","
                                        "sentry_secret=" (getf (dsn sentry-client) :secret-key))))
                        :connection-timeout (connection-timeout sentry-client)))
@@ -88,7 +94,7 @@
 
 (defun encode-core-attributes (json-stream &optional (sentry-client *sentry-client*))
   (json:encode-object-member "event_id" (make-sentry-event-id) json-stream)
-  (json:encode-object-member "timestamp" (local-time:format-timestring nil (local-time:now) :format +sentry-timestamp-format+) json-stream)
+  (json:encode-object-member "timestamp" (format-sentry-timestamp nil (local-time:now)) json-stream)
   (json:encode-object-member "logger" "cl-sentry-client" json-stream)
   (json:encode-object-member "platform" "other" json-stream)
   (json:as-object-member ("sdk" json-stream)
@@ -124,3 +130,15 @@
   `(handler-case (progn ,@body)
      (error (e)
        (sentry-client:capture-exception e))))
+
+(defvar *unix-epoch-difference*
+  (encode-universal-time 0 0 0 1 1 1970 0))
+
+(defun universal-to-unix-time (universal-time)
+  (- universal-time *unix-epoch-difference*))
+
+(defun unix-to-universal-time (unix-time)
+  (+ unix-time *unix-epoch-difference*))
+
+(defun get-unix-time ()
+  (universal-to-unix-time (get-universal-time)))
