@@ -30,6 +30,16 @@ Or in your own error handler:
         (let ((sb-debug:*stack-top-hint* nil)) 
            (sentry-client:capture-exception condition))))
 ```
+## Async client version
+
+The async version of the client uses simple-tasks library for sending HTTP requests in the background
+
+```lisp
+(ql:quickload :sentry-client.async)
+
+(sentry-client:initialize-sentry-client <dsn> :client-class 'sentry-client:async-sentry-client)
+(sentry-client:test-sentry-client)
+```
 
 ## Screenshots
 
