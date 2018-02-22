@@ -41,13 +41,11 @@
                        :initform 10
                        :accessor connection-timeout)))
 
-(defun make-sentry-client (dsn &key tags)
-  (make-instance 'sentry-client
-                 :dsn (read-dsn dsn)
-                 :tags tags))
-
-(defun initialize-sentry-client (dsn &rest args &key tags)
-  (setf *sentry-client* (apply #'make-sentry-client dsn args)))
+(defun initialize-sentry-client (dsn &rest args &key tags (client-class 'sentry-client))
+  (setf *sentry-client*
+        (apply #'make-instance client-class
+               :dsn (read-dsn dsn)
+               (alexandria:remove-from-plist args :client-class))))
 
 (defun call-with-sentry-client (function dsn &rest args &key tags)
   (let ((*sentry-client* (apply #'make-sentry-client dsn args)))
@@ -133,16 +131,21 @@
                  (json:as-array-member (json-stream)
                    (encode-frame frame)))))))))
 
-(defun capture-exception (condition &key tags)
-  (let ((json (with-output-to-string (json:*json-output*)
-                (json:with-object ()
-                  (encode-core-attributes json:*json-output*
-                                          *sentry-client*)
-                  (json:as-object-member ("exception")
-                    (json:with-object ()
-                      (encode-exception condition json:*json-output*
-                                        *sentry-client*)))))))
-    (post-sentry-request json *sentry-client*)))
+(defun capture-exception (condition &rest args &key tags)
+  (apply #'client-capture-exception *sentry-client* condition args))
+
+(defun encode-exception-event (condition &optional (sentry-client *sentry-client*))
+  (with-output-to-string (json:*json-output*)
+    (json:with-object ()
+      (encode-core-attributes json:*json-output*
+                              sentry-client)
+      (json:as-object-member ("exception")
+        (json:with-object ()
+          (encode-exception condition json:*json-output*
+                            sentry-client))))))
+
+(defmethod client-capture-exception ((sentry-client sentry-client) condition &rest args &key tags)
+  (post-sentry-request (encode-exception-event condition sentry-client) sentry-client))
 
 (defun capture-message (message &key tags)
   )

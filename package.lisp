@@ -4,4 +4,6 @@
            #:test-sentry-client
            #:capture-exception
            #:capture-message
-           #:with-sentry-error-handler))
+           #:with-sentry-error-handler
+           #:sentry-client
+           #:async-sentry-client))
