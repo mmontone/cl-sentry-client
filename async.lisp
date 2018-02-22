@@ -21,7 +21,7 @@
   (maybe-initialize-tasks))
 
 (defmethod client-capture-exception ((sentry-client async-sentry-client) condition &rest args &key tags)
-  (let ((json (encode-exception-event condition sentry-client) sentry-client))
+  (let ((json (encode-exception-event condition sentry-client)))
     (let ((task (make-instance 'simple-tasks:call-task
                              :func (lambda () (post-sentry-request json *sentry-client*)))))
       (simple-tasks:schedule-task task *tasks-runner*))))
