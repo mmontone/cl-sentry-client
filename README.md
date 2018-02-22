@@ -30,6 +30,9 @@ Or in your own error handler:
         (let ((sb-debug:*stack-top-hint* nil)) 
            (sentry-client:capture-exception condition))))
 ```
+
+Just add `sentry-client.hunchentoot` as ASDF dependency to include the Hunchentoot handler.
+
 ## Async client version
 
 The async version of the client uses simple-tasks library for sending HTTP requests in the background
@@ -40,8 +43,6 @@ The async version of the client uses simple-tasks library for sending HTTP reque
 (sentry-client:initialize-sentry-client <dsn> :client-class 'sentry-client:async-sentry-client)
 (sentry-client:test-sentry-client)
 ```
-
-Just add `sentry-client.hunchentoot` as ASDF dependency to include the Hunchentoot handler.
 
 ## Screenshots
 
