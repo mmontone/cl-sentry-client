@@ -41,6 +41,8 @@ The async version of the client uses simple-tasks library for sending HTTP reque
 (sentry-client:test-sentry-client)
 ```
 
+Just add `sentry-client.hunchentoot` as ASDF dependency to include the Hunchentoot handler.
+
 ## Screenshots
 
 ![alt text](https://github.com/mmontone/cl-sentry-client/raw/master/doc/screenshot1.png "Screenshot 1")
