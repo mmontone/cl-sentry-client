@@ -1,4 +1,4 @@
-# cl-sentry-client
+# CL-SENTRY-CLIENT
 
 Sentry client for Common Lisp
 
