@@ -58,9 +58,9 @@
 
 (defun sentry-api-url (&optional (sentry-client *sentry-client*))
   (concatenate 'string (getf (dsn sentry-client) :uri) "/api/"
-               (getf (dsn sentry-client) :project-id) "/store/")) 
+               (getf (dsn sentry-client) :project-id) "/store/"))
 
-(defparameter +sentry-timestamp-format+ 
+(defparameter +sentry-timestamp-format+
   (append local-time:+iso-8601-date-format+
           (list #\T) local-time:+iso-8601-time-format+))
 
@@ -104,8 +104,34 @@
   (json:encode-object-member "type" (princ-to-string (type-of condition)) json-stream)
   (json:encode-object-member "value" (princ-to-string condition) json-stream)
   (json:encode-object-member "module" (princ-to-string (package-name (symbol-package (type-of condition)))) json-stream)
-  (json:as-object-member ("stacktrace") 
-    (encode-stacktrace condition json-stream sentry-client)))
+  (json:as-object-member ("stacktrace")
+                         (encode-stacktrace condition json-stream sentry-client)))
+
+
+
+#+lispworks
+(defun lw-map-backtrace (fn)
+  "On Lispworks, trivial-backtrace:map-backtrace is unavailable. Maybe
+move this to trivial-backtrace in the future"
+  (mp:map-process-backtrace
+   mp:*current-process*
+   (lambda (frame)
+     (funcall
+      fn
+      (trivial-backtrace::make-frame
+       :func frame
+       :source-filename (let* ((locations (dspec:find-dspec-locations frame))
+                               (loc (cadr (car locations))))
+                          (if (symbolp loc)
+                              loc
+                              (namestring loc)))
+       :source-pos "unknown"
+       ;; In theory, we can implement vars. mp:map-process-backtrace
+       ;; takes one more undocumented keyword argument :frame-func
+       ;; that gets a frame object. In practice it's hard to get
+       ;; right, because the objects can have loops.
+       :vars nil)))))
+
 
 (defun encode-stacktrace (condition json-stream &optional (sentry-client *sentry-client*))
   "Encode the stacktrace as a plain string for now"
@@ -123,7 +149,12 @@
              ;;(json:encode-object-member "lineno" (trivial-backtrace::frame-source-pos frame))
              )))
     (let ((frames nil))
-      (trivial-backtrace:map-backtrace (lambda (frame) (push frame frames)))
+      (let ((func (lambda (frame) (push frame frames))))
+        #-lispworks
+        (trivial-backtrace:map-backtrace func)
+
+        #+lispworks
+        (lw-map-backtrace func))
       (json:with-object (json-stream)
         (json:as-object-member ("frames" json-stream)
           (json:with-array (json-stream)
