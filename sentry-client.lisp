@@ -90,11 +90,17 @@
   (ironclad:byte-array-to-hex-string
    (uuid:uuid-to-byte-array (uuid:make-v4-uuid))))
 
-(defun encode-core-attributes (json-stream &optional (sentry-client *sentry-client*))
+(defun encode-core-attributes (json-stream &optional (sentry-client *sentry-client*)
+                               &key extras)
   (json:encode-object-member "event_id" (make-sentry-event-id) json-stream)
   (json:encode-object-member "timestamp" (format-sentry-timestamp nil (local-time:now)) json-stream)
   (json:encode-object-member "logger" "cl-sentry-client" json-stream)
   (json:encode-object-member "platform" "other" json-stream)
+  (json:as-object-member ("extra" json-stream)
+    (json:with-object (json-stream)
+      (loop for extra in extras collect
+           (destructuring-bind (key . val) extra
+             (json:encode-object-member (princ-to-string key) (princ-to-string val))))))
   (json:as-object-member ("sdk" json-stream)
     (json:with-object (json-stream)
       (json:encode-object-member "name" "cl-sentry-client")
@@ -162,21 +168,22 @@ move this to trivial-backtrace in the future"
                  (json:as-array-member (json-stream)
                    (encode-frame frame)))))))))
 
-(defun capture-exception (condition &rest args &key tags)
+(defun capture-exception (condition &rest args)
   (apply #'client-capture-exception *sentry-client* condition args))
 
-(defun encode-exception-event (condition &optional (sentry-client *sentry-client*))
+(defun encode-exception-event (condition &optional (sentry-client *sentry-client*) &key extras)
   (with-output-to-string (json:*json-output*)
     (json:with-object ()
       (encode-core-attributes json:*json-output*
-                              sentry-client)
+                              sentry-client
+                              :extras extras)
       (json:as-object-member ("exception")
         (json:with-object ()
           (encode-exception condition json:*json-output*
                             sentry-client))))))
 
-(defmethod client-capture-exception ((sentry-client sentry-client) condition &rest args &key tags)
-  (post-sentry-request (encode-exception-event condition sentry-client) sentry-client))
+(defmethod client-capture-exception ((sentry-client sentry-client) condition &rest args &key tags extras)
+  (post-sentry-request (encode-exception-event condition sentry-client :extras extras) sentry-client))
 
 (defun capture-message (message &key tags)
   )
