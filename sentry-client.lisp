@@ -178,9 +178,11 @@ move this to trivial-backtrace in the future"
                               sentry-client
                               :extras extras)
       (json:as-object-member ("exception")
-        (json:with-object ()
-          (encode-exception condition json:*json-output*
-                            sentry-client))))))
+        (json:with-array ()
+          (json:as-array-member ("values")
+            (json:with-object ()
+              (encode-exception condition json:*json-output*
+                                sentry-client))))))))
 
 (defmethod client-capture-exception ((sentry-client sentry-client) condition &rest args &key tags extras)
   (post-sentry-request (encode-exception-event condition sentry-client :extras extras) sentry-client))
