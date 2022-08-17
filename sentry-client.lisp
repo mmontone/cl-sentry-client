@@ -192,9 +192,6 @@ move this to trivial-backtrace in the future"
 (defmethod client-capture-exception ((sentry-client sentry-client) condition &rest args &key tags extras)
   (post-sentry-request (encode-exception-event condition sentry-client :extras extras) sentry-client))
 
-(defun capture-message (message &key tags)
-  )
-
 (defmacro with-sentry-error-handler ((&key (resignal t)) &body body)
   `(handler-case (progn ,@body)
      (error (e)
