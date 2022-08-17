@@ -6,4 +6,5 @@
            #:capture-message
            #:with-sentry-error-handler
            #:sentry-client
-           #:async-sentry-client))
+           #:async-sentry-client
+	   #:*sentry-client*))

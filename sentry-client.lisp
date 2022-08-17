@@ -1,11 +1,15 @@
 (in-package #:sentry-client)
 
-(defvar *sentry-client*)
+(defvar *sentry-client*
+  "The current sentry client.")
 
 (defparameter +dsn-regex+ "(.*)\\:\\/\\/(.*)\\@(.*)\\/(.*)")
 
 (defun parse-dsn (dsn-string)
-  "'{PROTOCOL}://{PUBLIC_KEY}@{HOST}/{PATH}{PROJECT_ID}'"
+  "Parse a DSN string to a list object.
+See: https://docs.sentry.io/product/sentry-basics/dsn-explainer/"
+  
+  ;; Format: {PROTOCOL}://{PUBLIC_KEY}@{HOST}/{PATH}{PROJECT_ID}
   (ppcre:register-groups-bind (protocol public-key host project-id)
       (+dsn-regex+ dsn-string)
     (when (not (every (alexandria:compose 'not 'null)
@@ -20,6 +24,7 @@
   (error "Bad DSN format"))
 
 (defun read-dsn (dsn)
+  "Return a DSN object. If DSN is an object already, it returns it. If it is a string, it parses it."
   (cond
     ((stringp dsn) (parse-dsn dsn))
     ((consp dsn) dsn)
@@ -28,33 +33,34 @@
 (defclass sentry-client ()
   ((dsn :initarg :dsn
         :initform (error "Provide the DSN")
-        :accessor dsn)
-   (tags :initarg :tags
-         :initform nil
-         :accessor sentry-tags)
+	:accessor dsn)
    (transport :initarg :transport
               :initform :http
               :accessor sentry-transport)
    (connection-timeout :initarg :connection-timeout
                        :initform 10
-                       :accessor connection-timeout)))
+                       :accessor connection-timeout))
+  (:documentation "A sentry client"))
 
-(defun make-sentry-client (dsn &key tags)
-  (make-instance 'sentry-client
-                 :dsn (read-dsn dsn)
-                 :tags tags))
+(defmethod initialize-instance :after ((sentry-client sentry-client) &rest initargs)
+  (declare (ignore initargs))
+  (setf (dsn sentry-client) (read-dsn (dsn sentry-client))))
 
-(defun initialize-sentry-client (dsn &rest args &key tags (client-class 'sentry-client))
+(defun make-sentry-client (dsn &optional (class 'sentry-client))
+  (make-instance class :dsn (read-dsn dsn)
+
+(defun initialize-sentry-client (dsn &rest args &key (client-class 'sentry-client))
   (setf *sentry-client*
         (apply #'make-instance client-class
                :dsn (read-dsn dsn)
                (alexandria:remove-from-plist args :client-class))))
 
-(defun call-with-sentry-client (function dsn &rest args &key tags)
+(defun call-with-sentry-client (function dsn &rest args)
+  "Call FUNCTION in the context of a SENTRY-CLIENT instantied using DSN and ARGS."
   (let ((*sentry-client* (apply #'make-sentry-client dsn args)))
     (funcall function)))
 
-(defmacro with-sentry-client ((dsn &rest args &key tags) &body body)
+(defmacro with-sentry-client (() &body body)
   `(call-with-sentry-client (lambda () ,@body) ,dsn ,@args))
 
 (defun sentry-api-url (&optional (sentry-client *sentry-client*))
@@ -71,6 +77,14 @@
                                 :format +sentry-timestamp-format+
                                 :timezone local-time:+UTC-ZONE+))
 
+(defun encode-sentry-auth-header (sentry-client)
+  (fmt:fmt nil "Sentry sentry_version=" 5 ","
+           "sentry_client=" "cl-sentry-client/"
+           (asdf:component-version (asdf:find-system :sentry-client)) ","
+           "sentry_timestamp=" (format-sentry-timestamp nil (local-time:now)) ","
+           "sentry_key=" (getf (dsn sentry-client) :public-key) ","
+           "sentry_secret=" (getf (dsn sentry-client) :secret-key)))
+
 (defun post-sentry-request (data &optional (sentry-client *sentry-client*))
   (drakma:http-request (sentry-api-url)
                        :method :post
@@ -78,13 +92,7 @@
                        :content data
                        :additional-headers
                        (list
-                        (cons "X-Sentry-Auth"
-                              (fmt:fmt nil "Sentry sentry_version=" 5 ","
-                                       "sentry_client=" "cl-sentry-client/"
-                                       (asdf:component-version (asdf:find-system :sentry-client)) ","
-                                       "sentry_timestamp=" (format-sentry-timestamp nil (local-time:now)) ","
-                                       "sentry_key=" (getf (dsn sentry-client) :public-key) ","
-                                       "sentry_secret=" (getf (dsn sentry-client) :secret-key))))
+                        (cons "X-Sentry-Auth" (encode-sentry-auth-header sentry-client)))
                        :connection-timeout (connection-timeout sentry-client)))
 
 (defun make-sentry-event-id ()
@@ -113,8 +121,6 @@
   (json:encode-object-member "module" (princ-to-string (package-name (symbol-package (type-of condition)))) json-stream)
   (json:as-object-member ("stacktrace")
     (encode-stacktrace condition json-stream sentry-client)))
-
-
 
 #+lispworks
 (defun lw-map-backtrace (fn)
@@ -195,7 +201,7 @@ move this to trivial-backtrace in the future"
        ,@(when resignal
            `((error e))))))
 
-(defun test-sentry-client (&optional (sentry-client *sentry-client*))
-  (handler-case (error "Sentry client test")
+(defun test-sentry-client (datum &rest args)
+  (handler-case (error datum args)
     (error (e)
       (capture-exception e))))
