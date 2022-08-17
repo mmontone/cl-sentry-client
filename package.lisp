@@ -7,4 +7,5 @@
            #:with-sentry-error-handler
            #:sentry-client
            #:async-sentry-client
-	   #:*sentry-client*))
+	   #:*sentry-client*
+	   #:sentry-tags))

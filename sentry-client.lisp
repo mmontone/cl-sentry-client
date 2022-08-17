@@ -1,9 +1,38 @@
 (in-package #:sentry-client)
 
-(defvar *sentry-client*
+(defvar *sentry-client* nil
   "The current sentry client.")
 
+(defparameter +sentry-timestamp-format+
+  (append local-time:+iso-8601-date-format+
+          (list #\T) local-time:+iso-8601-time-format+))
+
 (defparameter +dsn-regex+ "(.*)\\:\\/\\/(.*)\\@(.*)\\/(.*)")
+
+(defgeneric sentry-tags (error)
+  (:documentation "Returns the list of tags for ERROR.
+User can specialize this generic function for custom CONDITION classes."))
+
+(defmethod sentry-tags ((condition condition))
+  nil)
+
+(defmethod sentry-tags ((warning warning))
+  (list "warning"))
+
+(defmethod sentry-tags ((error error))
+  (list "error"))
+
+(defgeneric condition-severity-level (condition)
+  (:documentation "The condition severity level (warning, error, etc)"))
+
+(defmethod condition-severity-level ((condition condition))
+  :info)
+
+(defmethod condition-severity-level ((condition warning))
+  :warning)
+
+(defmethod condition-severity-level ((condition error))
+  :error)
 
 (defun parse-dsn (dsn-string)
   "Parse a DSN string to a list object.
@@ -67,10 +96,6 @@ See: https://docs.sentry.io/product/sentry-basics/dsn-explainer/"
   (concatenate 'string (getf (dsn sentry-client) :uri) "/api/"
                (getf (dsn sentry-client) :project-id) "/store/"))
 
-(defparameter +sentry-timestamp-format+
-  (append local-time:+iso-8601-date-format+
-          (list #\T) local-time:+iso-8601-time-format+))
-
 (defun format-sentry-timestamp (stream timestamp)
   "Format TIMESTAMP for Sentry."
   (local-time:format-timestring stream
@@ -104,12 +129,18 @@ See: https://docs.sentry.io/product/sentry-basics/dsn-explainer/"
   (ironclad:byte-array-to-hex-string
    (uuid:uuid-to-byte-array (uuid:make-v4-uuid))))
 
-(defun encode-core-event-attributes (json-stream &key extras sentry-client)
+(defun encode-core-event-attributes (condition json-stream &key extras sentry-client)
+  "Encode core Sentry event attributes.
+
+See: https://develop.sentry.dev/sdk/event-payloads/"
+  
   (declare (ignorable sentry-client))
   (json:encode-object-member "event_id" (make-sentry-event-id) json-stream)
   (json:encode-object-member "timestamp" (format-sentry-timestamp nil (local-time:now)) json-stream)
+  (json:encode-object-member "level" (condition-severity-level condition))
   (json:encode-object-member "logger" "cl-sentry-client" json-stream)
   (json:encode-object-member "platform" "other" json-stream)
+  (json:encode-object-member "tags" (sentry-tags condition))
   (json:as-object-member ("extra" json-stream)
     (json:with-object (json-stream)
       (loop for extra in extras
@@ -122,6 +153,7 @@ See: https://docs.sentry.io/product/sentry-basics/dsn-explainer/"
       (json:encode-object-member "version" (asdf:component-version (asdf:find-system :sentry-client))))))
 
 (defun encode-exception (condition json-stream &optional (sentry-client *sentry-client*))
+  "Encode CONDITION into JSON-STREAM."
   (json:encode-object-member "type" (princ-to-string (type-of condition)) json-stream)
   (json:encode-object-member "value" (princ-to-string condition) json-stream)
   (json:encode-object-member "module" (princ-to-string (package-name (symbol-package (type-of condition)))) json-stream)
@@ -182,12 +214,15 @@ move this to trivial-backtrace in the future"
                 (encode-frame frame)))))))))
 
 (defun capture-exception (condition &rest args)
+  "Send CONDITION to Sentry."
   (apply #'client-capture-exception *sentry-client* condition args))
 
 (defun encode-exception-event (condition &key (sentry-client *sentry-client*) extras)
+  "Encode CONDITION to a string in JSON format for Sentry."
   (with-output-to-string (json:*json-output*)
     (json:with-object ()
-      (encode-core-event-attributes json:*json-output*
+      (encode-core-event-attributes condition
+				    json:*json-output*
                                     :sentry-client sentry-client
                                     :extras extras)
       (json:as-object-member ("exception")
