@@ -41,6 +41,11 @@
                        :initform 10
                        :accessor connection-timeout)))
 
+(defun make-sentry-client (dsn &key tags)
+  (make-instance 'sentry-client
+                 :dsn (read-dsn dsn)
+                 :tags tags))
+
 (defun initialize-sentry-client (dsn &rest args &key tags (client-class 'sentry-client))
   (setf *sentry-client*
         (apply #'make-instance client-class
