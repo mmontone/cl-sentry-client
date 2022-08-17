@@ -184,7 +184,8 @@ move this to trivial-backtrace in the future"
 
 
 (defun encode-stacktrace (condition json-stream &optional (sentry-client *sentry-client*))
-  "Encode the stacktrace as a plain string for now"
+  (declare (ignorable condition sentry-client))
+  "Encode stacktrace for CONDITION as JSON in JSON-STREAM."
   (flet ((encode-frame (frame)
            (json:with-object (json-stream)
              (json:encode-object-member "function" (princ-to-string (trivial-backtrace::frame-func frame)) json-stream)
@@ -245,6 +246,10 @@ move this to trivial-backtrace in the future"
            `((error e))))))
 
 (defun test-sentry-client (datum &rest args)
-  (handler-case (error datum args)
+  "Use for testing the sentry client.
+
+Use: (test-sentry-client 'error \"my error\")"
+  
+  (handler-case (apply #'error datum args)
     (error (e)
       (capture-exception e))))
