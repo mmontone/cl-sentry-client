@@ -104,8 +104,8 @@
   (json:as-object-member ("extra" json-stream)
     (json:with-object (json-stream)
       (loop for extra in extras collect
-           (destructuring-bind (key . val) extra
-             (json:encode-object-member (princ-to-string key) (princ-to-string val))))))
+                                (destructuring-bind (key . val) extra
+                                  (json:encode-object-member (princ-to-string key) (princ-to-string val))))))
   (json:as-object-member ("sdk" json-stream)
     (json:with-object (json-stream)
       (json:encode-object-member "name" "cl-sentry-client")
@@ -116,7 +116,7 @@
   (json:encode-object-member "value" (princ-to-string condition) json-stream)
   (json:encode-object-member "module" (princ-to-string (package-name (symbol-package (type-of condition)))) json-stream)
   (json:as-object-member ("stacktrace")
-                         (encode-stacktrace condition json-stream sentry-client)))
+    (encode-stacktrace condition json-stream sentry-client)))
 
 
 
@@ -152,10 +152,10 @@ move this to trivial-backtrace in the future"
              (json:as-object-member ("vars" json-stream)
                (json:with-object (json-stream)
                  (loop for var in (trivial-backtrace::frame-vars frame)
-                    do
-                      (json:encode-object-member (princ-to-string (trivial-backtrace::var-name var))
-                                                 (princ-to-string (trivial-backtrace::var-value var))
-                                                 json-stream))))
+                       do
+                          (json:encode-object-member (princ-to-string (trivial-backtrace::var-name var))
+                                                     (princ-to-string (trivial-backtrace::var-value var))
+                                                     json-stream))))
              (json:encode-object-member "filename" (trivial-backtrace::frame-source-filename frame))
              ;;(json:encode-object-member "lineno" (trivial-backtrace::frame-source-pos frame))
              )))
@@ -170,8 +170,8 @@ move this to trivial-backtrace in the future"
         (json:as-object-member ("frames" json-stream)
           (json:with-array (json-stream)
             (loop for frame in frames do
-                 (json:as-array-member (json-stream)
-                   (encode-frame frame)))))))))
+              (json:as-array-member (json-stream)
+                (encode-frame frame)))))))))
 
 (defun capture-exception (condition &rest args)
   (apply #'client-capture-exception *sentry-client* condition args))
