@@ -10,17 +10,11 @@
 (defparameter +dsn-regex+ "(.*)\\:\\/\\/(.*)\\@(.*)\\/(.*)")
 
 (defgeneric sentry-tags (error)
-  (:documentation "Returns the list of tags for ERROR.
+  (:documentation "Returns an alist of tags for ERROR.
 User can specialize this generic function for custom CONDITION classes."))
 
 (defmethod sentry-tags ((condition condition))
   nil)
-
-(defmethod sentry-tags ((warning warning))
-  (list "warning"))
-
-(defmethod sentry-tags ((error error))
-  (list "error"))
 
 (defgeneric condition-severity-level (condition)
   (:documentation "The condition severity level (warning, error, etc)"))
@@ -93,6 +87,10 @@ See: https://docs.sentry.io/product/sentry-basics/dsn-explainer/"
   `(call-with-sentry-client (lambda () ,@body) ,dsn ,@args))
 
 (defun sentry-api-url (&optional (sentry-client *sentry-client*))
+  "The events url.
+
+See: https://develop.sentry.dev/sdk/store/"
+  
   (concatenate 'string (getf (dsn sentry-client) :uri) "/api/"
                (getf (dsn sentry-client) :project-id) "/store/"))
 
@@ -140,7 +138,8 @@ See: https://develop.sentry.dev/sdk/event-payloads/"
   (json:encode-object-member "level" (condition-severity-level condition))
   (json:encode-object-member "logger" "cl-sentry-client" json-stream)
   (json:encode-object-member "platform" "other" json-stream)
-  (json:encode-object-member "tags" (sentry-tags condition))
+  (alexandria:when-let ((tags (sentry-tags condition)))
+    (json:encode-json-alist tags json-stream))
   (json:as-object-member ("extra" json-stream)
     (json:with-object (json-stream)
       (loop for extra in extras
