@@ -140,12 +140,8 @@ See: https://develop.sentry.dev/sdk/event-payloads/"
   (json:encode-object-member "platform" "other" json-stream)
   (alexandria:when-let ((tags (sentry-tags condition)))
     (json:encode-json-alist tags json-stream))
-  (json:as-object-member ("extra" json-stream)
-    (json:with-object (json-stream)
-      (loop for extra in extras
-            collect
-            (destructuring-bind (key . val) extra
-              (json:encode-object-member (princ-to-string key) (princ-to-string val))))))
+  (when extras
+    (json:encode-json-alist extras json-stream))
   (json:as-object-member ("sdk" json-stream)
     (json:with-object (json-stream)
       (json:encode-object-member "name" "cl-sentry-client")
