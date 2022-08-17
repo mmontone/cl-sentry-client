@@ -59,8 +59,6 @@
 (defmacro with-sentry-client ((dsn &rest args &key tags) &body body)
   `(call-with-sentry-client (lambda () ,@body) ,dsn ,@args))
 
-(defun test-sentry-client (&optional (sentry-client *sentry-client*)))
-
 (defun sentry-api-url (&optional (sentry-client *sentry-client*))
   (concatenate 'string (getf (dsn sentry-client) :uri) "/api/"
                (getf (dsn sentry-client) :project-id) "/store/"))
