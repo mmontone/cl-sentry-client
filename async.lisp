@@ -1,4 +1,8 @@
-(in-package :sentry-client)
+(defpackage :sentry-client.async
+  (:use :cl :sentry-client)
+  (:export :initialize-async-sentry-client))
+
+(in-package :sentry-client.async)
 
 (defclass async-sentry-client (sentry-client)
   ()
@@ -18,21 +22,22 @@
 (defun initialize-async-sentry-client (dsn &rest args)
   "Initialize an async sentry client instance."
   (setf *sentry-client*
-        (apply #'make-instance 'async-sentry-client
-               :dsn (read-dsn dsn)
-               args)))
+        (apply #'make-instance 'async-sentry-client :dsn dsn args)))
 
 (defmethod initialize-instance :after ((sentry-client async-sentry-client) &rest initargs)
   (declare (ignore initargs))
   ;; Start background tasks for async client
   (maybe-initialize-tasks))
 
-(defmethod client-capture-exception ((sentry-client async-sentry-client) condition &key extras transaction)
-  (let ((json (encode-exception-event condition
-                                      :sentry-client sentry-client
-                                      :extras extras
-                                      :transaction transaction)))
+(defmethod sentry-client::client-capture-exception ((sentry-client async-sentry-client) condition &key extras transaction)
+  (when (not *tasks-runner*)
+    (error "Sentry async task runner not running"))
+  (let ((json (sentry-client::encode-exception-event
+               condition
+               :sentry-client sentry-client
+               :extras extras
+               :transaction transaction)))
     (let ((task (make-instance 'simple-tasks:call-task
                                :func (lambda ()
-                                       (post-sentry-request json sentry-client)))))
+                                       (sentry-client::post-sentry-request json sentry-client)))))
       (simple-tasks:schedule-task task *tasks-runner*))))
