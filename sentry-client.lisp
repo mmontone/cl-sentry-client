@@ -2,20 +2,18 @@
 
 (defvar *sentry-client*)
 
-(defparameter +dsn-regex+ "(.*)\\:\\/\\/(.*)\\:(.*)@(.*)\\/(.*)")
+(defparameter +dsn-regex+ "(.*)\\:\\/\\/(.*)\\@(.*)\\/(.*)")
 
 (defun parse-dsn (dsn-string)
-  "'{PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}/{PATH}{PROJECT_ID}'"
-  (ppcre:register-groups-bind (protocol public-key secret-key host project-id)
+  "'{PROTOCOL}://{PUBLIC_KEY}@{HOST}/{PATH}{PROJECT_ID}'"
+  (ppcre:register-groups-bind (protocol public-key host project-id)
       (+dsn-regex+ dsn-string)
     (when (not (every (alexandria:compose 'not 'null)
-                      (list protocol public-key
-                            secret-key host project-id)))
+                      (list protocol public-key host project-id)))
       (error "Bad DSN format"))
     (return-from parse-dsn
       (list :protocol protocol
             :public-key public-key
-            :secret-key secret-key
             :host host
             :project-id project-id
             :uri (concatenate 'string protocol "://" host))))
