@@ -78,26 +78,28 @@ See: https://docs.sentry.io/product/sentry-basics/dsn-explainer/"
                :dsn (read-dsn dsn)
                (alexandria:remove-from-plist args :client-class))))
 
-(defun call-with-sentry-client (function dsn &rest args)
-  "Call FUNCTION in the context of a SENTRY-CLIENT instantied using DSN and ARGS."
-  (let ((*sentry-client* (apply #'make-sentry-client dsn args)))
+(defun call-with-sentry-client (function client-class &rest args)
+  "Call FUNCTION in the context of a SENTRY-CLIENT instantied from CLIENT-CLASS and ARGS."
+  (let ((*sentry-client* (apply #'make-instance client-class args)))
     (funcall function)))
 
-(defmacro with-sentry-client (() &body body)
-  `(call-with-sentry-client (lambda () ,@body) ,dsn ,@args))
+(defmacro with-sentry-client ((class &rest args) &body body)
+  "Run BODY in the scope of a sentry client created from CLASS and ARGS."
+  `(call-with-sentry-client (lambda () ,@body) ',class ,@args))
 
 (defun sentry-api-url (&optional (sentry-client *sentry-client*))
   "The events url.
 
 See: https://develop.sentry.dev/sdk/store/"
-  
+
   (concatenate 'string (getf (dsn sentry-client) :uri) "/api/"
                (getf (dsn sentry-client) :project-id) "/store/"))
 
-(defun format-sentry-timestamp (stream timestamp)
-  "Format TIMESTAMP for Sentry."
+(defun format-sentry-timestamp (stream &optional timestamp)
+  "Format TIMESTAMP for Sentry.
+If no TIMESTAMP is provided, then current time is used."
   (local-time:format-timestring stream
-                                (local-time:now)
+                                (or timestamp (local-time:now))
                                 :format +sentry-timestamp-format+
                                 :timezone local-time:+UTC-ZONE+))
 
@@ -127,16 +129,18 @@ See: https://develop.sentry.dev/sdk/store/"
   (ironclad:byte-array-to-hex-string
    (uuid:uuid-to-byte-array (uuid:make-v4-uuid))))
 
-(defun encode-core-event-attributes (condition json-stream &key extras sentry-client)
+(defun encode-core-event-attributes (condition json-stream &key extras sentry-client transaction)
   "Encode core Sentry event attributes.
 
 See: https://develop.sentry.dev/sdk/event-payloads/"
-  
+
   (declare (ignorable sentry-client))
   (json:encode-object-member "event_id" (make-sentry-event-id) json-stream)
   (json:encode-object-member "timestamp" (format-sentry-timestamp nil (local-time:now)) json-stream)
   (json:encode-object-member "level" (condition-severity-level condition))
   (json:encode-object-member "logger" "cl-sentry-client" json-stream)
+  (when transaction
+    (json:encode-object-member "transaction" transaction))
   (json:encode-object-member "platform" "other" json-stream)
   (alexandria:when-let ((tags (sentry-tags condition)))
     (json:encode-json-alist tags json-stream))
@@ -213,14 +217,15 @@ move this to trivial-backtrace in the future"
   "Send CONDITION to Sentry."
   (apply #'client-capture-exception *sentry-client* condition args))
 
-(defun encode-exception-event (condition &key (sentry-client *sentry-client*) extras)
+(defun encode-exception-event (condition &key (sentry-client *sentry-client*) extras transaction)
   "Encode CONDITION to a string in JSON format for Sentry."
   (with-output-to-string (json:*json-output*)
     (json:with-object ()
       (encode-core-event-attributes condition
-				    json:*json-output*
+                                    json:*json-output*
                                     :sentry-client sentry-client
-                                    :extras extras)
+                                    :extras extras
+                                    :transaction transaction)
       (json:as-object-member ("exception")
         (json:with-array ()
           (json:as-array-member ("values")
@@ -228,13 +233,18 @@ move this to trivial-backtrace in the future"
               (encode-exception condition json:*json-output*
                                 sentry-client))))))))
 
-(defmethod client-capture-exception ((sentry-client sentry-client) condition &key extras)
-  (post-sentry-request (encode-exception-event condition
-                                               :sentry-client sentry-client
-                                               :extras extras)
-                       sentry-client))
+(defmethod client-capture-exception ((sentry-client sentry-client) condition &key extras transaction)
+  "Send CONDITION to Sentry."
+  (post-sentry-request
+   (encode-exception-event condition
+                           :sentry-client sentry-client
+                           :extras extras
+                           :transaction transaction)
+   sentry-client))
 
 (defmacro with-sentry-error-handler ((&key (resignal t)) &body body)
+  "Setup an error handler that sends conditions signaled in BODY to Sentry.
+If RESIGNAL is T (default), then the condition is resignaled after being captured by the Sentry handler."
   `(handler-case (progn ,@body)
      (error (e)
        (sentry-client:capture-exception e)
@@ -245,7 +255,7 @@ move this to trivial-backtrace in the future"
   "Use for testing the sentry client.
 
 Use: (test-sentry-client 'error \"my error\")"
-  
+
   (handler-case (apply #'error datum args)
     (error (e)
       (capture-exception e))))
