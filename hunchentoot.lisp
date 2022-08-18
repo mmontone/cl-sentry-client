@@ -11,7 +11,7 @@
     (:request-headers . hunchentoot:headers-in))
   "An alist of keys and request accessor functions for extracting information from current request and adding to Stripe exception.")
 
-(defvar *session-extras* t
+(defvar *session-extras* nil
   "If T, then all session values are exposed.
 If a list of keys, then only the values of those keys in current session are exposed.
 If nil, then no session information is exposed.")
