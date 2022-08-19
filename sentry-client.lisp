@@ -186,8 +186,8 @@ move this to trivial-backtrace in the future"
 
 
 (defun encode-stacktrace (condition json-stream &optional (sentry-client *sentry-client*))
-  (declare (ignorable condition sentry-client))
   "Encode stacktrace for CONDITION as JSON in JSON-STREAM."
+  (declare (ignorable condition sentry-client))
   (flet ((encode-frame (frame)
            (json:with-object (json-stream)
              (json:encode-object-member "function" (princ-to-string (trivial-backtrace::frame-func frame)) json-stream)
