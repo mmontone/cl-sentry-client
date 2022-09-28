@@ -105,12 +105,12 @@ If no TIMESTAMP is provided, then current time is used."
 
 (defun encode-sentry-auth-header (sentry-client)
   "Encode Sentry authentication header."
-  (fmt:fmt nil "Sentry sentry_version=" 5 ","
-           "sentry_client=" "cl-sentry-client/"
-           (asdf:component-version (asdf:find-system :sentry-client)) ","
-           "sentry_timestamp=" (format-sentry-timestamp nil (local-time:now)) ","
-           "sentry_key=" (getf (dsn sentry-client) :public-key) ","
-           "sentry_secret=" (getf (dsn sentry-client) :secret-key)))
+  (format nil "Sentry ~:{~(~A~)=~A~:^,~}"
+          `((sentry_version 5)
+            (sentry_client ,(concatenate 'string "cl-sentry-client/"
+                                         (asdf:component-version (asdf:find-system :sentry-client))))
+            (sentry_timestamp ,(format-sentry-timestamp nil (local-time:now)))
+            (sentry_key ,(getf (dsn sentry-client) :public-key)))))
 
 (defun post-sentry-request (data &optional (sentry-client *sentry-client*))
   "Just send DATA to sentry api via HTTP."

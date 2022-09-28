@@ -11,7 +11,6 @@
                :cl-json
                :cl-ppcre
                :uuid
-               :fmt
                :local-time
                :trivial-backtrace)
   :components ((:file "package")
