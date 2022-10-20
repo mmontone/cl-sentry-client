@@ -114,15 +114,18 @@ If no TIMESTAMP is provided, then current time is used."
 
 (defun post-sentry-request (data &optional (sentry-client *sentry-client*))
   "Just send DATA to sentry api via HTTP."
-  (drakma:http-request
-   (sentry-api-url)
-   :method :post
-   :content-type "application/json"
-   :content data
-   :additional-headers
-   (list
-    (cons "X-Sentry-Auth" (encode-sentry-auth-header sentry-client)))
-   :connection-timeout (connection-timeout sentry-client)))
+  (let ((compressed (salza2:compress-data (babel:string-to-octets data)
+                                          'salza2:gzip-compressor)))
+    (drakma:http-request
+      (sentry-api-url)
+      :method :post
+      :content-type "application/json"
+      :content compressed
+      :additional-headers
+      (list
+        (cons "Content-Encoding" "gzip")
+        (cons "X-Sentry-Auth" (encode-sentry-auth-header sentry-client)))
+      :connection-timeout (connection-timeout sentry-client))))
 
 (defun make-sentry-event-id ()
   "Create an ID for a new Sentry event."

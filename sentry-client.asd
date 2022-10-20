@@ -12,6 +12,8 @@
                :cl-ppcre
                :uuid
                :local-time
-               :trivial-backtrace)
+               :trivial-backtrace
+               :babel
+               :salza2)
   :components ((:file "package")
                (:file "sentry-client")))
