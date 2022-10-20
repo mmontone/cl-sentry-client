@@ -62,12 +62,20 @@ See: https://docs.sentry.io/product/sentry-basics/dsn-explainer/"
               :accessor sentry-transport)
    (connection-timeout :initarg :connection-timeout
                        :initform 10
-                       :accessor connection-timeout))
+                       :accessor connection-timeout)
+   (release :initarg :release
+            :initform nil
+            :accessor project-release)
+   (environment :initarg :environment
+                :initform "production"
+                :accessor running-environment))
   (:documentation "A sentry client"))
 
 (defmethod initialize-instance :after ((sentry-client sentry-client) &rest initargs)
   (declare (ignore initargs))
-  (setf (dsn sentry-client) (read-dsn (dsn sentry-client))))
+  (setf (dsn sentry-client) (read-dsn (dsn sentry-client)))
+  (setf (running-environment sentry-client)
+        (or (running-environment sentry-client) "production")))
 
 (defun make-sentry-client (dsn &optional (class 'sentry-client))
   (make-instance class :dsn (read-dsn dsn)))
@@ -137,7 +145,6 @@ If no TIMESTAMP is provided, then current time is used."
 
 See: https://develop.sentry.dev/sdk/event-payloads/"
 
-  (declare (ignorable sentry-client))
   (json:encode-object-member "event_id" (make-sentry-event-id) json-stream)
   (json:encode-object-member "timestamp" (format-sentry-timestamp nil (local-time:now)) json-stream)
   (json:encode-object-member "level" (condition-severity-level condition))
@@ -145,9 +152,12 @@ See: https://develop.sentry.dev/sdk/event-payloads/"
   (when transaction
     (json:encode-object-member "transaction" transaction))
   (json:encode-object-member "platform" "other" json-stream)
+  (alexandria:when-let ((release (project-release sentry-client)))
+    (json:encode-object-member "release" release))
   (alexandria:when-let ((tags (sentry-tags condition)))
     (json:as-object-member ("tags" json-stream)
       (json:encode-json-alist tags json-stream)))
+  (json:encode-object-member "environment" (running-environment sentry-client))
   (when extras
     (json:as-object-member ("extra" json-stream)
       (json:encode-json-alist extras json-stream)))
