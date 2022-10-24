@@ -129,7 +129,8 @@ If no TIMESTAMP is provided, then current time is used."
               :headers `(("Content-Type" . "json")
                          ("Content-Encoding" . "gzip")
                          ("X-Sentry-Auth" . ,(encode-sentry-auth-header sentry-client)))
-              :connect-timeout (connection-timeout sentry-client))))
+              :connect-timeout (connection-timeout sentry-client)
+              :keep-alive nil)))
 
 (defun make-sentry-event-id ()
   "Create an ID for a new Sentry event."
