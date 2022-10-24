@@ -7,7 +7,7 @@
   :long-description #.(uiop:read-file-string
      (uiop:subpathname *load-pathname* "README.md"))              
   :serial t
-  :depends-on (:drakma
+  :depends-on (:dexador
                :cl-json
                :cl-ppcre
                :uuid
