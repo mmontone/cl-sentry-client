@@ -162,7 +162,7 @@ See: https://develop.sentry.dev/sdk/event-payloads/"
     (encode-stacktrace condition json-stream sentry-client)))
 
 #+lispworks
-(defun lw-map-backtrace (fn)
+(defun trivial-backtrace::impl-map-backtrace (fn)
   "On Lispworks, trivial-backtrace:map-backtrace is unavailable. Maybe
 move this to trivial-backtrace in the future"
   (mp:map-process-backtrace
@@ -203,11 +203,7 @@ move this to trivial-backtrace in the future"
              )))
     (let ((frames nil))
       (let ((func (lambda (frame) (push frame frames))))
-        #-lispworks
-        (trivial-backtrace:map-backtrace func)
-
-        #+lispworks
-        (lw-map-backtrace func))
+        (trivial-backtrace:map-backtrace func))
       (json:with-object (json-stream)
         (json:as-object-member ("frames" json-stream)
           (json:with-array (json-stream)
