@@ -3,11 +3,23 @@
 (defvar *sentry-client* nil
   "The current sentry client.")
 
+(defvar *request* nil)
+
 (defparameter +sentry-timestamp-format+
   (append local-time:+iso-8601-date-format+
           (list #\T) local-time:+iso-8601-time-format+))
 
 (defparameter +dsn-regex+ "(.*)\\:\\/\\/(.*)\\@(.*)\\/(.*)")
+
+(defstruct sentry-request
+  url
+  method
+  headers)
+
+(defstruct sentry-request-headers
+  accept
+  host
+  user-agent)
 
 (defgeneric sentry-tags (error)
   (:documentation "Returns an alist of tags for ERROR.
@@ -137,7 +149,11 @@ If no TIMESTAMP is provided, then current time is used."
   (ironclad:byte-array-to-hex-string
    (uuid:uuid-to-byte-array (uuid:make-v4-uuid))))
 
-(defun encode-core-event-attributes (condition json-stream &key extras sentry-client transaction)
+(defun encode-core-event-attributes (condition json-stream
+                                     &key extras
+                                          sentry-client
+                                          transaction
+                                          (request *request*))
   "Encode core Sentry event attributes.
 
 See: https://develop.sentry.dev/sdk/event-payloads/"
@@ -158,6 +174,18 @@ See: https://develop.sentry.dev/sdk/event-payloads/"
   (when extras
     (json:as-object-member ("extra" json-stream)
       (json:encode-json-alist extras json-stream)))
+
+  (when request
+    (let ((headers (sentry-request-headers request)))
+      (json:as-object-member ("request")
+        (json:encode-json
+         `(("url" . ,(sentry-request-url request))
+           ("method" . ,(sentry-request-method request))
+           ("headers" . #(#("Accept" ,(sentry-request-headers-accept headers))
+                          #("Host" ,(sentry-request-headers-host headers))
+                          #("User-Agent" ,(sentry-request-headers-user-agent headers)))))
+         json-stream))))
+
   (json:as-object-member ("sdk" json-stream)
     (json:with-object (json-stream)
       (json:encode-object-member "name" "cl-sentry-client")
