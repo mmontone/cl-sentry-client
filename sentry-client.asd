@@ -14,6 +14,8 @@
                :local-time
                :trivial-backtrace
                :babel
-               :salza2)
+               :salza2
+               :swank)
   :components ((:file "package")
+               #+sbcl (:file "stacktrace")
                (:file "sentry-client")))
