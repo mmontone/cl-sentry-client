@@ -80,7 +80,10 @@ See: https://docs.sentry.io/product/sentry-basics/dsn-explainer/"
             :accessor project-release)
    (environment :initarg :environment
                 :initform "production"
-                :accessor running-environment))
+                :accessor running-environment)
+   (gzip-compression :initarg :gzip-compression
+                     :initform t
+                     :accessor gzip-compression-p))
   (:documentation "A sentry client"))
 
 (defmethod initialize-instance :after ((sentry-client sentry-client) &rest initargs)
@@ -134,15 +137,21 @@ If no TIMESTAMP is provided, then current time is used."
 
 (defun post-sentry-request (data &optional (sentry-client *sentry-client*))
   "Just send DATA to sentry api via HTTP."
-  (let ((compressed (salza2:compress-data (babel:string-to-octets data)
-                                          'salza2:gzip-compressor)))
-    (dex:post (sentry-api-url)
-              :content compressed
-              :headers `(("Content-Type" . "json")
-                         ("Content-Encoding" . "gzip")
-                         ("X-Sentry-Auth" . ,(encode-sentry-auth-header sentry-client)))
-              :connect-timeout (connection-timeout sentry-client)
-              :keep-alive nil)))
+  (if (gzip-compression-p sentry-client)
+      (let ((compressed (salza2:compress-data (babel:string-to-octets data)
+                                              'salza2:gzip-compressor)))
+        (dex:post (sentry-api-url)
+                  :content compressed
+                  :headers `(("Content-Type" . "json")
+                             ("Content-Encoding" . "gzip")
+                             ("X-Sentry-Auth" . ,(encode-sentry-auth-header sentry-client)))
+                  :connect-timeout (connection-timeout sentry-client)
+                  :keep-alive nil))
+      (dex:post (sentry-api-url)
+                :headers `(("Content-Type" . "application/json")
+                           ("X-Sentry-Auth" . ,(encode-sentry-auth-header sentry-client)))
+                :content data
+                :connect-timeout (connection-timeout sentry-client))))
 
 (defun make-sentry-event-id ()
   "Create an ID for a new Sentry event."
