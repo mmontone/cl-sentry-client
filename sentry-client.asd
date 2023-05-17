@@ -7,11 +7,15 @@
   :long-description #.(uiop:read-file-string
      (uiop:subpathname *load-pathname* "README.md"))              
   :serial t
-  :depends-on (:drakma
+  :depends-on (:dexador
                :cl-json
                :cl-ppcre
                :uuid
                :local-time
-               :trivial-backtrace)
+               :trivial-backtrace
+               :babel
+               :salza2
+               :swank)
   :components ((:file "package")
+               #+sbcl (:file "stacktrace")
                (:file "sentry-client")))

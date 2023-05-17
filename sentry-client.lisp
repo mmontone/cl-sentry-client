@@ -3,11 +3,23 @@
 (defvar *sentry-client* nil
   "The current sentry client.")
 
+(defvar *request* nil)
+
 (defparameter +sentry-timestamp-format+
   (append local-time:+iso-8601-date-format+
           (list #\T) local-time:+iso-8601-time-format+))
 
 (defparameter +dsn-regex+ "(.*)\\:\\/\\/(.*)\\@(.*)\\/(.*)")
+
+(defstruct sentry-request
+  url
+  method
+  headers)
+
+(defstruct sentry-request-headers
+  accept
+  host
+  user-agent)
 
 (defgeneric sentry-tags (error)
   (:documentation "Returns an alist of tags for ERROR.
@@ -62,12 +74,23 @@ See: https://docs.sentry.io/product/sentry-basics/dsn-explainer/"
               :accessor sentry-transport)
    (connection-timeout :initarg :connection-timeout
                        :initform 10
-                       :accessor connection-timeout))
+                       :accessor connection-timeout)
+   (release :initarg :release
+            :initform nil
+            :accessor project-release)
+   (environment :initarg :environment
+                :initform "production"
+                :accessor running-environment)
+   (gzip-compression :initarg :gzip-compression
+                     :initform t
+                     :accessor gzip-compression-p))
   (:documentation "A sentry client"))
 
 (defmethod initialize-instance :after ((sentry-client sentry-client) &rest initargs)
   (declare (ignore initargs))
-  (setf (dsn sentry-client) (read-dsn (dsn sentry-client))))
+  (setf (dsn sentry-client) (read-dsn (dsn sentry-client)))
+  (setf (running-environment sentry-client)
+        (or (running-environment sentry-client) "production")))
 
 (defun make-sentry-client (dsn &optional (class 'sentry-client))
   (make-instance class :dsn (read-dsn dsn)))
@@ -114,27 +137,36 @@ If no TIMESTAMP is provided, then current time is used."
 
 (defun post-sentry-request (data &optional (sentry-client *sentry-client*))
   "Just send DATA to sentry api via HTTP."
-  (drakma:http-request
-   (sentry-api-url)
-   :method :post
-   :content-type "application/json"
-   :content data
-   :additional-headers
-   (list
-    (cons "X-Sentry-Auth" (encode-sentry-auth-header sentry-client)))
-   :connection-timeout (connection-timeout sentry-client)))
+  (if (gzip-compression-p sentry-client)
+      (let ((compressed (salza2:compress-data (babel:string-to-octets data)
+                                              'salza2:gzip-compressor)))
+        (dex:post (sentry-api-url)
+                  :content compressed
+                  :headers `(("Content-Type" . "json")
+                             ("Content-Encoding" . "gzip")
+                             ("X-Sentry-Auth" . ,(encode-sentry-auth-header sentry-client)))
+                  :connect-timeout (connection-timeout sentry-client)
+                  :keep-alive nil))
+      (dex:post (sentry-api-url)
+                :headers `(("Content-Type" . "application/json")
+                           ("X-Sentry-Auth" . ,(encode-sentry-auth-header sentry-client)))
+                :content data
+                :connect-timeout (connection-timeout sentry-client))))
 
 (defun make-sentry-event-id ()
   "Create an ID for a new Sentry event."
   (ironclad:byte-array-to-hex-string
    (uuid:uuid-to-byte-array (uuid:make-v4-uuid))))
 
-(defun encode-core-event-attributes (condition json-stream &key extras sentry-client transaction)
+(defun encode-core-event-attributes (condition json-stream
+                                     &key extras
+                                          sentry-client
+                                          transaction
+                                          (request *request*))
   "Encode core Sentry event attributes.
 
 See: https://develop.sentry.dev/sdk/event-payloads/"
 
-  (declare (ignorable sentry-client))
   (json:encode-object-member "event_id" (make-sentry-event-id) json-stream)
   (json:encode-object-member "timestamp" (format-sentry-timestamp nil (local-time:now)) json-stream)
   (json:encode-object-member "level" (condition-severity-level condition))
@@ -142,23 +174,45 @@ See: https://develop.sentry.dev/sdk/event-payloads/"
   (when transaction
     (json:encode-object-member "transaction" transaction))
   (json:encode-object-member "platform" "other" json-stream)
+  (alexandria:when-let ((release (project-release sentry-client)))
+    (json:encode-object-member "release" release))
   (alexandria:when-let ((tags (sentry-tags condition)))
     (json:as-object-member ("tags" json-stream)
       (json:encode-json-alist tags json-stream)))
+  (json:encode-object-member "environment" (running-environment sentry-client))
   (when extras
     (json:as-object-member ("extra" json-stream)
       (json:encode-json-alist extras json-stream)))
+
+  (when request
+    (let ((headers (sentry-request-headers request)))
+      (json:as-object-member ("request")
+        (json:encode-json
+         `(("url" . ,(sentry-request-url request))
+           ("method" . ,(sentry-request-method request))
+           ("headers" . #(#("Accept" ,(sentry-request-headers-accept headers))
+                          #("Host" ,(sentry-request-headers-host headers))
+                          #("User-Agent" ,(sentry-request-headers-user-agent headers)))))
+         json-stream))))
+
   (json:as-object-member ("sdk" json-stream)
     (json:with-object (json-stream)
       (json:encode-object-member "name" "cl-sentry-client")
       (json:encode-object-member "version" (asdf:component-version (asdf:find-system :sentry-client))))))
 
 (defun encode-exception (condition json-stream &optional (sentry-client *sentry-client*))
+  (declare (ignorable sentry-client))
   "Encode CONDITION into JSON-STREAM."
   (json:encode-object-member "type" (princ-to-string (type-of condition)) json-stream)
   (json:encode-object-member "value" (princ-to-string condition) json-stream)
   (json:encode-object-member "module" (princ-to-string (package-name (symbol-package (type-of condition)))) json-stream)
   (json:as-object-member ("stacktrace")
+    #+sbcl
+    (handler-case (encode-sbcl-stacktrace json-stream)
+      (error ()
+        ;; fallback if an error occurs in encode-sbcl-stacktrace
+        (encode-stacktrace condition json-stream sentry-client)))
+    #-sbcl
     (encode-stacktrace condition json-stream sentry-client)))
 
 #+lispworks

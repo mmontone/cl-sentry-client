@@ -1,6 +1,9 @@
 (defpackage #:sentry-client
   (:use #:cl)
-  (:export #:initialize-sentry-client
+  (:export #:*request*
+           #:make-sentry-request
+           #:make-sentry-request-headers
+           #:initialize-sentry-client
            #:test-sentry-client
            #:capture-exception
            #:capture-message
