@@ -1,7 +1,5 @@
 (in-package :sentry-client)
 
-(declaim (optimize (speed 0) (safety 3) (debug 3)))
-
 (defun split-lines (string)
   (uiop:split-string string :separator '(#\newline)))
 
