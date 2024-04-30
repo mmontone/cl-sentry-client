@@ -242,7 +242,9 @@ move this to trivial-backtrace in the future"
 
 
 (defun encode-stacktrace (condition json-stream &optional (sentry-client *sentry-client*))
-  "Encode stacktrace for CONDITION as JSON in JSON-STREAM."
+  "Encode stacktrace for CONDITION as JSON in JSON-STREAM.
+
+See: https://develop.sentry.dev/sdk/event-payloads/stacktrace/"
   (declare (ignorable condition sentry-client))
   (flet ((encode-frame (frame)
            (json:with-object (json-stream)
