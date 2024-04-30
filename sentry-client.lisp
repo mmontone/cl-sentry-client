@@ -305,12 +305,12 @@ EXTRAS: an association list with extra app specific information to encode in the
                            :transaction transaction)
    sentry-client))
 
-(defmacro with-sentry-error-handler ((&key (resignal t)) &body body)
+(defmacro with-sentry-error-handler ((&rest args &key (resignal t) &allow-other-keys) &body body)
   "Setup an error handler that sends conditions signaled in BODY to Sentry.
 If RESIGNAL is T (default), then the condition is resignaled after being captured by the Sentry handler."
   `(handler-case (progn ,@body)
      (error (e)
-       (sentry-client:capture-exception e)
+       (sentry-client:capture-exception e ,@(alexandria:remove-from-plist args :resignal))
        ,@(when resignal
            `((error e))))))
 
