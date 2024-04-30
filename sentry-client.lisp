@@ -202,7 +202,9 @@ See: https://develop.sentry.dev/sdk/event-payloads/"
 
 (defun encode-exception (condition json-stream &optional (sentry-client *sentry-client*))
   (declare (ignorable sentry-client))
-  "Encode CONDITION into JSON-STREAM."
+  "Encode CONDITION into JSON-STREAM.
+
+See: https://develop.sentry.dev/sdk/event-payloads/"
   (json:encode-object-member "type" (princ-to-string (type-of condition)) json-stream)
   (json:encode-object-member "value" (princ-to-string condition) json-stream)
   (json:encode-object-member "module" (princ-to-string (package-name (symbol-package (type-of condition)))) json-stream)
