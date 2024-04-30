@@ -272,7 +272,9 @@ move this to trivial-backtrace in the future"
   (apply #'client-capture-exception *sentry-client* condition args))
 
 (defun encode-exception-event (condition &key (sentry-client *sentry-client*) extras transaction)
-  "Encode CONDITION to a string in JSON format for Sentry."
+  "Encode CONDITION to a string in JSON format for Sentry.
+
+See: https://develop.sentry.dev/sdk/event-payloads/exception/"
   (with-output-to-string (json:*json-output*)
     (json:with-object ()
       (encode-core-event-attributes condition
