@@ -15,7 +15,8 @@
                :trivial-backtrace
                :babel
                :salza2
-               :swank)
+               :swank
+               :alexandria)
   :components ((:file "package")
                #+sbcl (:file "stacktrace")
                (:file "sentry-client")))
