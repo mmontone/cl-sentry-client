@@ -270,7 +270,10 @@ See: https://develop.sentry.dev/sdk/event-payloads/stacktrace/"
                 (encode-frame frame)))))))))
 
 (defun capture-exception (condition &rest args)
-  "Send CONDITION to Sentry."
+  "Send CONDITION to Sentry.
+
+Possible args:
+- :EXTRAS: an association list with extra app specific information to encode in the Sentry event."
   (apply #'client-capture-exception *sentry-client* condition args))
 
 (defun encode-exception-event (condition &key (sentry-client *sentry-client*) extras transaction)
@@ -292,7 +295,9 @@ See: https://develop.sentry.dev/sdk/event-payloads/exception/"
                                 sentry-client))))))))
 
 (defmethod client-capture-exception ((sentry-client sentry-client) condition &key extras transaction)
-  "Send CONDITION to Sentry."
+  "Send CONDITION to Sentry.
+
+EXTRAS: an association list with extra app specific information to encode in the Sentry event."
   (post-sentry-request
    (encode-exception-event condition
                            :sentry-client sentry-client
