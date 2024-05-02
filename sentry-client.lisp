@@ -124,7 +124,7 @@ See: https://docs.sentry.io/product/sentry-basics/dsn-explainer/"
 (defun make-sentry-client (dsn &optional (class 'sentry-client))
   (make-instance class :dsn (read-dsn dsn)))
 
-(defun initialize-sentry-client (dsn &rest args &key (client-class 'sentry-client))
+(defun initialize-sentry-client (dsn &rest args &key (client-class 'sentry-client) &allow-other-keys)
   (setf *sentry-client*
         (apply #'make-instance client-class
                :dsn (read-dsn dsn)
