@@ -11,7 +11,10 @@
            #:sentry-client
            #:async-sentry-client
 	   #:*sentry-client*
-	   #:sentry-tags)
+	   #:sentry-tags
+           #:sentry-request
+           #:sentry-user
+           #:make-sentry-user)
   (:documentation #.(uiop:read-file-string
 		     (uiop:subpathname (or *compile-file-pathname*
 					   *load-pathname*)

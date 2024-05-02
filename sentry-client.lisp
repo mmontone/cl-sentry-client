@@ -11,15 +11,39 @@
 
 (defparameter +dsn-regex+ "(.*)\\:\\/\\/(.*)\\@(.*)\\/(.*)")
 
-(defstruct sentry-request
-  url
-  method
-  headers)
-
 (defstruct sentry-request-headers
-  accept
-  host
-  user-agent)
+  (accept nil :type string)
+  (host nil :type string)
+  (user-agent nil :type string))
+
+(defstruct sentry-request
+  "The Request interface contains information on a HTTP request related to the event.
+
+See: https://develop.sentry.dev/sdk/event-payloads/request/"
+  (url nil :type (or null string))
+  (method nil :type (or null string))
+  (headers nil :type (or null sentry-request-headers)))
+
+(defstruct geo-location
+  "Approximate geographical location of the end user or device.
+
+See: https://develop.sentry.dev/sdk/event-payloads/user/"
+  (city nil :type string)
+  (country-code nil :type string)
+  (region nil :type string))
+
+(defstruct sentry-user
+  "An interface describing the authenticated User for a request.
+
+You should provide at least one of id, email, ip_address, username for Sentry to be able to tell you how many users are affected by one issue, for example. Sending a user that has none of these attributes and only custom attributes is valid, but not as useful.
+
+See: https://develop.sentry.dev/sdk/event-payloads/user/"
+  (id nil :type (or null string))
+  (username nil :type (or null string))
+  (email nil :type (or null string))
+  (ip-address nil :type (or null string))
+  (geo nil :type (or null geo-location))
+  (extras nil :type list))
 
 (defgeneric sentry-tags (error)
   (:documentation "Returns an alist of tags for ERROR.
@@ -158,47 +182,72 @@ If no TIMESTAMP is provided, then current time is used."
   (ironclad:byte-array-to-hex-string
    (uuid:uuid-to-byte-array (uuid:make-v4-uuid))))
 
+(declaim (ftype (function (condition stream &key (:extras list)
+                                     (:sentry-client (or null sentry-client))
+                                     (:transaction t)
+                                     (:user (or null sentry-user))
+                                     (:request (or null sentry-request)))
+                          t)
+                encode-core-event-attributes))
+
 (defun encode-core-event-attributes (condition json-stream
                                      &key extras
-                                          sentry-client
-                                          transaction
-                                          (request *request*))
+                                       sentry-client
+                                       transaction
+                                       user
+                                       (request *request*))
   "Encode core Sentry event attributes.
 
 See: https://develop.sentry.dev/sdk/event-payloads/"
 
-  (json:encode-object-member "event_id" (make-sentry-event-id) json-stream)
-  (json:encode-object-member "timestamp" (format-sentry-timestamp nil (local-time:now)) json-stream)
-  (json:encode-object-member "level" (condition-severity-level condition))
-  (json:encode-object-member "logger" "cl-sentry-client" json-stream)
-  (when transaction
-    (json:encode-object-member "transaction" transaction))
-  (json:encode-object-member "platform" "other" json-stream)
-  (alexandria:when-let ((release (project-release sentry-client)))
-    (json:encode-object-member "release" release))
-  (alexandria:when-let ((tags (sentry-tags condition)))
-    (json:as-object-member ("tags" json-stream)
-      (json:encode-json-alist tags json-stream)))
-  (json:encode-object-member "environment" (running-environment sentry-client))
-  (when extras
-    (json:as-object-member ("extra" json-stream)
-      (json:encode-json-alist extras json-stream)))
-
-  (when request
-    (let ((headers (sentry-request-headers request)))
-      (json:as-object-member ("request")
-        (json:encode-json
-         `(("url" . ,(sentry-request-url request))
-           ("method" . ,(sentry-request-method request))
-           ("headers" . #(#("Accept" ,(sentry-request-headers-accept headers))
-                          #("Host" ,(sentry-request-headers-host headers))
-                          #("User-Agent" ,(sentry-request-headers-user-agent headers)))))
-         json-stream))))
-
-  (json:as-object-member ("sdk" json-stream)
-    (json:with-object (json-stream)
-      (json:encode-object-member "name" "cl-sentry-client")
-      (json:encode-object-member "version" (asdf:component-version (asdf:find-system :sentry-client))))))
+  (let ((json:*json-output* json-stream))
+    (json:encode-object-member "event_id" (make-sentry-event-id))
+    (json:encode-object-member "timestamp" (format-sentry-timestamp nil (local-time:now)))
+    (json:encode-object-member "level" (condition-severity-level condition))
+    (json:encode-object-member "logger" "cl-sentry-client")
+    (when transaction
+      (json:encode-object-member "transaction" transaction))
+    (json:encode-object-member "platform" "other")
+    (alexandria:when-let ((release (project-release sentry-client)))
+      (json:encode-object-member "release" release))
+    (alexandria:when-let ((tags (sentry-tags condition)))
+      (json:as-object-member ("tags")
+        (json:encode-json-alist tags)))
+    (json:encode-object-member "environment" (running-environment sentry-client))
+    (when user
+      (json:as-object-member ("user")
+        (json:with-object ()
+          (when (sentry-user-id user)
+            (json:encode-object-member :id (sentry-user-id user)))
+          (when (sentry-user-username user)
+            (json:encode-object-member :username (sentry-user-username user)))
+          (when (sentry-user-email user)
+            (json:encode-object-member :email (sentry-user-email user)))
+          (when (sentry-user-ip-address user)
+            (json:encode-object-member "ip_address" (sentry-user-ip-address user)))
+          (dolist (extra (sentry-user-extras user))
+            (json:encode-object-member (car extra) (cdr extra))))))
+    (when extras
+      (json:as-object-member ("extra")
+        (json:encode-json-alist extras)))
+    (when request
+      (json:as-object-member ("request" json-stream)
+        (json:with-object ()
+          (when (sentry-request-url request)
+            (json:encode-object-member :url (sentry-request-url request)))
+          (when (sentry-request-method request)
+            (json:encode-object-member :method (sentry-request-method request)))
+          (let ((headers (sentry-request-headers request)))
+            (when headers
+              (json:encode-object-member
+               :headers
+               `#(#("Accept" (sentry-request-headers-accept headers))
+                  #("Host" ,(sentry-request-headers-host headers))
+                  #("User-Agent" ,(sentry-request-headers-user-agent headers)))))))))
+    (json:as-object-member ("sdk")
+      (json:with-object (json-stream)
+        (json:encode-object-member "name" "cl-sentry-client")
+        (json:encode-object-member "version" (asdf:component-version (asdf:find-system :sentry-client)))))))
 
 (defun encode-exception (condition json-stream &optional (sentry-client *sentry-client*))
   (declare (ignorable sentry-client))
@@ -276,7 +325,7 @@ Possible args:
 - :EXTRAS: an association list with extra app specific information to encode in the Sentry event."
   (apply #'client-capture-exception *sentry-client* condition args))
 
-(defun encode-exception-event (condition &key (sentry-client *sentry-client*) extras transaction)
+(defun encode-exception-event (condition &key (sentry-client *sentry-client*) extras user transaction)
   "Encode CONDITION to a string in JSON format for Sentry.
 
 See: https://develop.sentry.dev/sdk/event-payloads/exception/"
@@ -285,6 +334,7 @@ See: https://develop.sentry.dev/sdk/event-payloads/exception/"
       (encode-core-event-attributes condition
                                     json:*json-output*
                                     :sentry-client sentry-client
+                                    :user user
                                     :extras extras
                                     :transaction transaction)
       (json:as-object-member ("exception")
@@ -294,13 +344,14 @@ See: https://develop.sentry.dev/sdk/event-payloads/exception/"
               (encode-exception condition json:*json-output*
                                 sentry-client))))))))
 
-(defmethod client-capture-exception ((sentry-client sentry-client) condition &key extras transaction)
+(defmethod client-capture-exception ((sentry-client sentry-client) condition &key extras user transaction)
   "Send CONDITION to Sentry.
 
 EXTRAS: an association list with extra app specific information to encode in the Sentry event."
   (post-sentry-request
    (encode-exception-event condition
                            :sentry-client sentry-client
+                           :user user
                            :extras extras
                            :transaction transaction)
    sentry-client))
