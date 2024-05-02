@@ -101,7 +101,12 @@ See: https://docs.sentry.io/product/sentry-basics/dsn-explainer/"
                        :accessor connection-timeout)
    (release :initarg :release
             :initform nil
-            :accessor project-release)
+            :accessor project-release
+            :documentation "The release version of the application.")
+   (server-name :initarg :server-name
+                :initform nil
+                :accessor server-name
+                :documentation "Identifies the host from which the event was recorded.")
    (environment :initarg :environment
                 :initform "production"
                 :accessor running-environment)
@@ -210,6 +215,8 @@ See: https://develop.sentry.dev/sdk/event-payloads/"
     (json:encode-object-member "platform" "other")
     (alexandria:when-let ((release (project-release sentry-client)))
       (json:encode-object-member "release" release))
+    (alexandria:when-let ((server-name (server-name sentry-client)))
+      (json:encode-object-member "server_name" server-name))
     (alexandria:when-let ((tags (sentry-tags condition)))
       (json:as-object-member ("tags")
         (json:encode-json-alist tags)))
