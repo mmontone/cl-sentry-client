@@ -264,7 +264,7 @@ See: https://develop.sentry.dev/sdk/event-payloads/"
   (json:encode-object-member "type" (princ-to-string (type-of condition)) json-stream)
   (json:encode-object-member "value" (princ-to-string condition) json-stream)
   (json:encode-object-member "module" (princ-to-string (package-name (symbol-package (type-of condition)))) json-stream)
-  (json:as-object-member ("stacktrace")
+  (json:as-object-member ("stacktrace" json-stream)
     #+sbcl
     (handler-case (encode-sbcl-stacktrace json-stream)
       (error ()
